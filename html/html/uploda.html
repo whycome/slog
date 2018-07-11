@@ -1,0 +1,115 @@
+
+<!-- plupload 文件上传 + 预览 -->
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>plupload</title>
+        <link href="{{ static_url('lib/bootstrap.min.css') }}" rel="stylesheet" type="text/css" />
+        <script src="{{ static_url('js/plupload.full.min.js') }}"></script>
+        <script src="{{ static_url('lib/jquery-1.11.3.min.js') }}"></script>
+        <script src="{{ static_url('lib/bootstrap.min.js') }}"></script>
+        <style>
+            .bar {background-color: #999999; display:block; width:0%; height:3px; border-radius: 20px}
+            .percent {position:absolute; height:15px; top:-18px; text-align:center; display:inline-block; left:0px; width:80px; color:#666; line-height:15px; font-size:12px; }
+            .plUpload {margin-top: 20px; position: absolute; left: 50%; top: 10%; transform: translate(-50%,-50%)}
+        </style>
+    </head>
+    <body>
+        <div class="plUpload">
+            <button id="browse" class="btn btn-default"><i class="glyphicon glyphicon-plus"></i> 选择文件</button>
+            <button id="start_upload" class="btn btn-success"><i id="startU" class="glyphicon glyphicon-play"></i> 开始上传</button>
+            <button id="stop_upload" class="btn btn-danger"><i class="glyphicon glyphicon-stop"></i> 停止上传</button>
+            <ul id="file_list"></ul>
+        </div>
+
+        <script>
+            var uploader = new plupload.Uploader({
+                browse_button: 'browse',  // 选择文件按钮
+                url: '/upload',  // 服务器端接收处理文件
+                mac_file_size: '5mb',  // 限制
+                // 文件限制 
+                filters: {
+                    mime_types: [
+                        {
+                            title: 'Image files',
+                            extensions: "jpg,gif,png"
+                        },
+                        {
+                            title: 'Zip files',
+                            extensions: 'zip'
+                        }
+                    ],
+                    mac_file_size: '5mb',  // 最大上传文件
+                    prevent_duplicates: true  // 不允许选取重复文件
+                },
+                multipart: true,  // true,以multipart/form-data上传文件, false, 以二进制上传文件
+                multipart_params: {   // 上传时附加参数
+                    one: 1
+                },
+                max_retries:2
+            })
+            uploader.init()
+            // 文件最大上传
+            var MAX_FILE_NUM = 20
+            // 文件选择完毕触发
+            uploader.bind('FilesAdded', function(uploader, addFiles) {
+                if ($('#file_list').children('li').length > 20) {
+                    alert('上传图片过多！')
+                    uploader.destroy()
+                } else {
+                    var oldLen = uploader.files.length - addFiles.length
+                    // 根据最大文件数量截取
+                    uploader.files.splice(MAX_FILE_NUM, uploader.files.length);
+                    addFiles = addFiles.slice(0, MAX_FILE_NUM - oldLen);
+                    // 对addFiles分别生成base64编码，用于预览
+                    $.each(addFiles || [], function (i, file) {
+                        if (!file || !/image\//.test(file.type)) return; //确保文件是图片
+                        if (file.type == 'image/gif') {//gif使用FileReader进行预览,因为mOxie.Image只支持jpg和png
+                            var fr = new mOxie.FileReader();
+                            fr.onload = function () {
+                                file.imgsrc = fr.result;
+                                fr.destroy();
+                                fr = null;
+                            }
+                            fr.readAsDataURL(file.getSource());
+                        } else {
+                            var preloader = new mOxie.Image();
+                            preloader.onload = function () {
+                                // preloader.downsize(180, 120);//先压缩一下要预览的图片
+                                var imgsrc = preloader.type == 'image/jpeg' ? preloader.getAsDataURL('image/jpeg', 80) : preloader.getAsDataURL(); //得到图片src,实质为一个base64编码的数据
+                                file.imgsrc = imgsrc;
+                                preloader.destroy();
+                                var t = '<li id="'+ file['id'] + '"  style="width: 180px"><img src="' + file.imgsrc + '" style="width: 180px"><div class="progress"><span class="bar"></span><span class="percent">上传中 0%</span></div></li>'
+                                $('#file_list').append(t)
+                                preloader = null;
+                            };
+                            preloader.load(file.getSource());
+                        }
+                    });
+                }
+            })
+            // 文件上传成功触发
+            uploader.bind('FileUploaded', function(uploader, file, data) {
+            })
+            // 文件上传中不断触发
+            uploader.bind('UploadProgress', function (uploader, file) {
+                var percent = file.percent
+                $('#' + file.id).find('.bar').css({'width': percent + '%'})
+                $('#' + file.id).find('.percent').text('上传中'+percent+'%')
+             })
+            uploader.bind('QueueChanged', function (uploader) {
+            })
+             // 上传
+            document.getElementById('start_upload').onclick = function() {
+                uploader.start()
+                document.getElementById("startU").setAttribute("class","glyphicon glyphicon-pause")
+            }
+            // 停止
+            document.getElementById('stop_upload').onclick = function() {
+                uploader.stop()
+                document.getElementById("startU").setAttribute("class","glyphicon glyphicon-play")
+            }
+        </script>
+    </body>
+</html>
